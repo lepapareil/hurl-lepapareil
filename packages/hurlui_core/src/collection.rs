@@ -21,8 +21,14 @@
 //! (one or several entries), sub-directories are folders and the `<name>.env`
 //! files at its root are its environments: Hurl variables files
 //! (`name=value`).
+//!
+//! A folder and a Hurl file can have options of `hurl` of their own, in an
+//! options file: `<folder>/<folder name>.options` for a folder,
+//! `<file name>.options` next to a Hurl file (`users.hurl.options`). See
+//! [`crate::options::parse_file`] for its format.
 
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fs::{self, File, Metadata};
 use std::io::Read;
@@ -31,6 +37,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::hurlfile::{self, Entry, KeyValue};
+use crate::options;
 use crate::store;
 
 const MAX_DEPTH: usize = 20;
@@ -57,6 +64,8 @@ pub enum Node {
     Folder {
         name: String,
         path: String,
+        /// Options of its options file, by long name.
+        options: Map<String, Value>,
         children: Vec<Node>,
     },
     File {
@@ -64,6 +73,8 @@ pub enum Node {
         path: String,
         /// Changes when the file does (see [`file_stamp`]).
         stamp: String,
+        /// Options of its options file, by long name.
+        options: Map<String, Value>,
         entries: Vec<EntrySummary>,
     },
 }
@@ -87,6 +98,8 @@ pub struct Environment {
 pub struct Collection {
     pub path: String,
     pub name: String,
+    /// Options of its options file, by long name.
+    pub options: Map<String, Value>,
     pub children: Vec<Node>,
     pub environments: Vec<Environment>,
 }
@@ -115,6 +128,53 @@ fn file_name(path: &Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| display(path))
+}
+
+/// Extension of an options file.
+pub const OPTIONS_EXTENSION: &str = "options";
+
+fn is_options(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e == OPTIONS_EXTENSION)
+}
+
+/// Options file of a folder (`<folder>/<folder name>.options`) or of a Hurl
+/// file (`<file name>.options`, next to it).
+pub fn options_path(path: &str) -> PathBuf {
+    let path = Path::new(path);
+    let name = format!("{}.{OPTIONS_EXTENSION}", file_name(path));
+    if path.is_dir() {
+        path.join(name)
+    } else {
+        path.with_file_name(name)
+    }
+}
+
+fn read_options_file(path: &Path) -> Map<String, Value> {
+    read_regular(path, MAX_PARSED_SIZE)
+        .map(|text| options::parse_file(&text).0)
+        .unwrap_or_default()
+}
+
+/// Writes the options of a folder or of a Hurl file in its options file.
+/// The lines of the file which are not options set here (comments...) are
+/// kept; the file is removed when nothing is left to write in it.
+pub fn save_options(path: &str, values: &Map<String, Value>) -> Result<(), String> {
+    if !Path::new(path).exists() {
+        return Err(format!("{path} does not exist"));
+    }
+    let file = options_path(path);
+    let others = match read_regular(&file, MAX_PARSED_SIZE) {
+        Ok(text) => options::parse_file(&text).1,
+        Err(_) => vec![],
+    };
+    let text = options::format_file(values, &others)?;
+    if text.is_empty() {
+        return match fs::remove_file(&file) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(io_err(&file, e)),
+            _ => Ok(()),
+        };
+    }
+    fs::write(&file, text).map_err(|e| io_err(&file, e))
 }
 
 fn is_hurl(path: &Path) -> bool {
@@ -222,6 +282,8 @@ struct Scan {
     nodes: Vec<Node>,
     hurl_files: usize,
     files: usize,
+    /// Options of the directory itself.
+    options: Map<String, Value>,
 }
 
 struct CachedFile {
@@ -279,12 +341,15 @@ fn scan_dir(dir: &Path, depth: usize, pass: &mut ScanPass) -> Scan {
         nodes: vec![],
         hurl_files: 0,
         files: 0,
+        options: Map::new(),
     };
     let Ok(read) = fs::read_dir(dir) else {
         return scan;
     };
     let mut folders = vec![];
     let mut files = vec![];
+    // Options files of the directory, by name.
+    let mut option_files: HashMap<String, PathBuf> = HashMap::new();
     for entry in read.flatten() {
         let path = entry.path();
         let name = file_name(&path);
@@ -304,10 +369,15 @@ fn scan_dir(dir: &Path, depth: usize, pass: &mut ScanPass) -> Scan {
                         folders.push(Node::Folder {
                             name,
                             path: display(&path),
+                            options: sub.options,
                             children: sub.nodes,
                         });
                     }
                 }
+            }
+            // Not a file of an unrelated project: it does not hide a folder.
+            Ok(_) if is_options(&path) => {
+                option_files.insert(name, path);
             }
             Ok(_) => {
                 scan.files += 1;
@@ -320,6 +390,7 @@ fn scan_dir(dir: &Path, depth: usize, pass: &mut ScanPass) -> Scan {
                         name,
                         stamp: stamp.text,
                         path: display(&path),
+                        options: Map::new(),
                         entries,
                     });
                 }
@@ -330,6 +401,16 @@ fn scan_dir(dir: &Path, depth: usize, pass: &mut ScanPass) -> Scan {
     let key = |n: &Node| match n {
         Node::Folder { name, .. } | Node::File { name, .. } => name.to_lowercase(),
     };
+    for file in &mut files {
+        if let Node::File { name, options, .. } = file
+            && let Some(path) = option_files.get(&format!("{name}.{OPTIONS_EXTENSION}"))
+        {
+            *options = read_options_file(path);
+        }
+    }
+    if let Some(path) = option_files.get(&format!("{}.{OPTIONS_EXTENSION}", file_name(dir))) {
+        scan.options = read_options_file(path);
+    }
     folders.sort_by_key(key);
     files.sort_by_key(key);
     scan.nodes = folders;
@@ -362,12 +443,13 @@ pub fn scan(config_dir: &Path, path: &str, cache: &mut ScanCache) -> Result<Coll
         // Nothing is kept of a collection which is gone.
         return Err(format!("{path} is not a directory"));
     }
-    let children = scan_dir(root, 0, &mut pass).nodes;
+    let scanned = scan_dir(root, 0, &mut pass);
     cache.files = pass.seen;
     Ok(Collection {
         path: path.to_string(),
         name: file_name(root),
-        children,
+        options: scanned.options,
+        children: scanned.nodes,
         environments: environments(config_dir, path),
     })
 }
@@ -648,7 +730,19 @@ pub fn rename_path(path: &str, name: &str) -> Result<String, String> {
         .parent()
         .ok_or_else(|| format!("{path} has no parent directory"))?;
     let to = new_child(&display(parent), &name)?;
+    // Its options file is named after it: taken before the name changes.
+    let options_from = options_path(path);
     fs::rename(from, &to).map_err(|e| io_err(from, e))?;
+    // The options follow: the file of a folder is now in the renamed folder.
+    let options_from = if to.is_dir() {
+        to.join(file_name(&options_from))
+    } else {
+        options_from
+    };
+    let options_to = options_path(&display(&to));
+    if options_from.is_file() && !options_to.exists() {
+        fs::rename(&options_from, &options_to).map_err(|e| io_err(&options_from, e))?;
+    }
     Ok(display(&to))
 }
 
@@ -662,6 +756,12 @@ pub fn clone_file(path: &str, name: &str) -> Result<String, String> {
         .ok_or_else(|| format!("{path} has no parent directory"))?;
     let to = new_child(&display(parent), &with_hurl_extension(name))?;
     fs::copy(from, &to).map_err(|e| io_err(from, e))?;
+    // A clone runs as its model: with the same options.
+    let options_from = options_path(path);
+    let options_to = options_path(&display(&to));
+    if options_from.is_file() && !options_to.exists() {
+        fs::copy(&options_from, &options_to).map_err(|e| io_err(&options_from, e))?;
+    }
     Ok(display(&to))
 }
 
@@ -671,7 +771,13 @@ pub fn delete_path(path: &str) -> Result<(), String> {
     if meta.is_dir() {
         fs::remove_dir_all(p).map_err(|e| io_err(p, e))
     } else {
-        fs::remove_file(p).map_err(|e| io_err(p, e))
+        // The options of a file go with it.
+        let options = options_path(path);
+        fs::remove_file(p).map_err(|e| io_err(p, e))?;
+        if options.is_file() {
+            fs::remove_file(&options).map_err(|e| io_err(&options, e))?;
+        }
+        Ok(())
     }
 }
 
@@ -738,6 +844,7 @@ pub fn reveal(path: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn temp_dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -1193,6 +1300,91 @@ mod tests {
             delete_environment(&config, &col, name).unwrap();
         }
         assert!(environments(&config, &col).is_empty());
+
+        // Options of a folder and of a Hurl file: in their options file.
+        let object = |value: Value| value.as_object().unwrap().clone();
+        assert_eq!(options_path(&col), Path::new(&col).join("api.options"));
+        assert_eq!(
+            options_path(&folder),
+            Path::new(&folder).join("users.options")
+        );
+        assert_eq!(
+            options_path(&file),
+            Path::new(&folder).join("list.hurl.options")
+        );
+        save_options(&col, &object(json!({ "insecure": true }))).unwrap();
+        save_options(
+            &folder,
+            &object(json!({ "header": ["X-A: 1"], "retry": "2" })),
+        )
+        .unwrap();
+        save_options(&file, &object(json!({ "max-time": "30s" }))).unwrap();
+        assert_eq!(
+            fs::read_to_string(options_path(&folder)).unwrap(),
+            "--header X-A: 1\n--retry 2\n"
+        );
+        assert!(save_options(&file, &object(json!({ "nope": true }))).is_err());
+        assert!(save_options(&format!("{folder}/missing.hurl"), &Map::new()).is_err());
+        let scanned = scan(&config, &col, &mut ScanCache::default()).unwrap();
+        assert_eq!(Value::Object(scanned.options), json!({ "insecure": true }));
+        let Node::Folder {
+            options, children, ..
+        } = &scanned.children[1]
+        else {
+            panic!("folder expected")
+        };
+        assert_eq!(options["retry"], "2");
+        let Node::File { name, options, .. } = &children[0] else {
+            panic!("file expected")
+        };
+        // Options files are not listed.
+        assert_eq!((children.len(), name.as_str()), (1, "list.hurl"));
+        assert_eq!(options["max-time"], "30s");
+        // Comments of the file are kept, and the file goes with its last line.
+        fs::write(options_path(&col), "# Shared\n--insecure\n").unwrap();
+        save_options(&col, &object(json!({ "location": true }))).unwrap();
+        assert_eq!(
+            fs::read_to_string(options_path(&col)).unwrap(),
+            "# Shared\n--location\n"
+        );
+        fs::remove_file(options_path(&col)).unwrap();
+        save_options(&col, &object(json!({ "location": true }))).unwrap();
+        save_options(&col, &Map::new()).unwrap();
+        assert!(!options_path(&col).exists());
+        // A folder which only holds its options is still shown.
+        save_options(
+            &format!("{col}/empty"),
+            &object(json!({ "insecure": true })),
+        )
+        .unwrap();
+        let scanned = scan(&config, &col, &mut ScanCache::default()).unwrap();
+        assert!(matches!(&scanned.children[0], Node::Folder { name, .. } if name == "empty"));
+        save_options(&format!("{col}/empty"), &Map::new()).unwrap();
+
+        // Options follow a rename, a clone and a removal.
+        let renamed = rename_path(&file, "all").unwrap();
+        assert!(renamed.ends_with("all.hurl"));
+        assert!(!Path::new(&folder).join("list.hurl.options").exists());
+        assert!(options_path(&renamed).is_file());
+        let cloned = clone_file(&renamed, "copy").unwrap();
+        assert_eq!(
+            fs::read_to_string(options_path(&cloned)).unwrap(),
+            "--max-time 30s\n"
+        );
+        delete_path(&cloned).unwrap();
+        assert!(!options_path(&cloned).exists());
+        let moved = rename_path(&folder, "people").unwrap();
+        assert_eq!(
+            options_path(&moved),
+            Path::new(&moved).join("people.options")
+        );
+        assert!(options_path(&moved).is_file());
+        assert!(!Path::new(&moved).join("users.options").exists());
+        let folder = rename_path(&moved, "users").unwrap();
+        let renamed = format!("{folder}/all.hurl");
+        save_options(&renamed, &Map::new()).unwrap();
+        save_options(&folder, &Map::new()).unwrap();
+        let file = rename_path(&renamed, "list").unwrap();
 
         let renamed = rename_path(&file, "all").unwrap();
         assert!(renamed.ends_with("all.hurl"));

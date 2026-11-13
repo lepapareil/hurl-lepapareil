@@ -20,7 +20,11 @@ import {
   envDraftKey,
   filesUnder,
   findNode,
+  levelsOf,
+  mergeOptions,
+  optionsFile,
   useStore,
+  type OptionValues,
   type Prefs,
   type RunnerFile,
   type RunnerState,
@@ -30,7 +34,7 @@ import {
 import type { Variable } from '../types';
 import { askText } from '../ui';
 import { Logo } from './Chrome';
-import { HurlOptionsForm, OptionCheck } from './HurlOptions';
+import { commandLine, HurlOptionsForm, OptionCheck } from './HurlOptions';
 import { CodeEditor } from './CodeEditor';
 import { DraftBanner, SyntaxBanner } from './EntryPanel';
 import { formatDuration } from './ResponsePane';
@@ -528,7 +532,49 @@ export function PreferencesPanel() {
         These options are added to every <code>hurl</code> command line. An <code>[Options]</code> section in a
         request takes precedence.
       </p>
-      <HurlOptionsForm />
+      <HurlOptionsForm values={prefs.options} setOption={useStore.getState().setOption} />
+    </div>
+  );
+}
+
+// --- Options of a folder or of a file ------------------------------------------
+
+const NO_OPTIONS: OptionValues = {};
+
+export function PathOptionsPanel({ tab }: { tab: Tab }) {
+  const values = useStore((s) => s.pathOptions[tab.path]) ?? NO_OPTIONS;
+  const pathOptions = useStore((s) => s.pathOptions);
+  const prefs = useStore((s) => s.prefs.options);
+  const catalog = useStore((s) => s.hurlOptions);
+  const setPathOption = useStore((s) => s.setPathOption);
+  const file = /\.hurl$/i.test(tab.path);
+  // What applies here before the options of this level.
+  const above = levelsOf(tab.collection, tab.path).slice(0, -1);
+  const inherited = commandLine(mergeOptions(catalog, [prefs, ...above.map((p) => pathOptions[p])]));
+
+  return (
+    <div className="preferences">
+      <h2>Options</h2>
+      <p className="panel-path" title={tab.path}>
+        {tab.path}
+      </p>
+      <p className="hint">
+        These options are added to the <code>hurl</code> command line when{' '}
+        {file ? 'this file is run, or one of its requests is sent' : 'a file of this folder is run, or one of its requests is sent'}
+        . They come after the options of the preferences and of the folders above: the nearest level wins, and the
+        options which can be given several times (headers, variables...) add up. An <code>[Options]</code> section
+        in a request takes precedence.
+      </p>
+      <p className="hint">
+        They are saved in <code>{optionsFile(tab.path, file)}</code>, written as the configuration file of Hurl: one
+        option per line.
+      </p>
+      {inherited && (
+        <p className="hint">
+          From the preferences and the folders above: <code>{inherited}</code>
+        </p>
+      )}
+      <HurlOptionsForm values={values} setOption={(long, value) => setPathOption(tab.path, long, value)} />
     </div>
   );
 }

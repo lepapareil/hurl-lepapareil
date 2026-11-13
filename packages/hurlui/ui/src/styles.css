@@ -525,6 +525,34 @@ h5 {
   font-weight: 600;
 }
 
+/* A path too long for its place is cut at its start: its end tells the most. */
+.path-label {
+  direction: rtl;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.path-label bdi {
+  direction: ltr;
+}
+
+/* Mark of a row which has options of its own. */
+.row-options {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--primary);
+}
+
+.row-options:hover {
+  color: var(--primary-text);
+  background: var(--primary);
+}
+
 .tree-icon,
 .chevron {
   flex: none;
@@ -682,6 +710,7 @@ h5 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   height: 40px;
   padding: 0 12px 0 16px;
 }
@@ -690,7 +719,18 @@ h5 {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-weight: 600;
+}
+
+.collection-title svg {
+  flex: none;
+}
+
+.collection-title .path-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .collection-actions {
@@ -716,13 +756,15 @@ h5 {
   border-color: var(--primary);
 }
 
+/* No line under the tabs: the opened tab is the one with an outline, in the
+   pink of the logo: one stroke up its left side, over its top and down its
+   right side, open at the bottom. */
 .request-tabs {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 4px;
-  height: 34px;
+  height: 36px;
   padding: 0 12px;
-  border-bottom: 1px solid var(--tabs-border);
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -739,8 +781,7 @@ h5 {
   flex: none;
   min-width: 80px;
   max-width: 200px;
-  height: 27px;
-  margin-bottom: 4px;
+  height: 28px;
   padding: 0 4px 0 10px;
   font-size: 13px;
   color: var(--text2);
@@ -755,13 +796,14 @@ h5 {
 }
 
 .request-tab.active {
-  height: 32px;
-  margin-bottom: -1px;
   color: var(--text);
   background: var(--bg);
-  border-color: var(--tabs-border);
-  border-bottom-color: var(--bg);
-  border-radius: 8px 8px 0 0;
+  border-color: var(--primary);
+  /* No bottom border at all (a transparent one would bevel the ends of the
+     sides): its place is kept by the padding. */
+  border-bottom-width: 0;
+  padding-bottom: 1px;
+  border-radius: 6px 6px 0 0;
 }
 
 .tab-name {

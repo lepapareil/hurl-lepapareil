@@ -13,6 +13,7 @@ import {
   sectionValueFor,
   type HurlOption,
   type KeyValue,
+  type OptionValue,
 } from '../types';
 
 /** What `hurl --help` shows for the value of an option. */
@@ -42,24 +43,33 @@ function OptionName({ option }: { option: HurlOption }) {
   );
 }
 
-/** Checkbox of a flag of `hurl`, by long name. Renders nothing if this version of Hurl has no such flag. */
-export function OptionCheck({ long }: { long: string }) {
-  const option = useStore((s) => s.hurlOptions?.options.find((o) => o.long === long));
-  const value = useStore((s) => s.prefs.options[long]);
-  const setOption = useStore((s) => s.setOption);
-  if (!option || option.kind !== 'flag' || !isSettable(option)) return null;
+/** Sets an option, or unsets it. */
+type SetOption = (long: string, value: OptionValue | undefined) => void;
+
+/** Checkbox of a flag of `hurl`. */
+function FlagCheck({ option, value, setOption }: { option: HurlOption; value?: OptionValue; setOption: SetOption }) {
   return (
     <label className="check" title={title(option)}>
-      <input type="checkbox" checked={value === true} onChange={(e) => setOption(long, e.target.checked)} />
+      <input type="checkbox" checked={value === true} onChange={(e) => setOption(option.long, e.target.checked)} />
       {option.help ?? option.long} <OptionName option={option} />
     </label>
   );
 }
 
-/** Control of an option which takes a value. */
-function OptionInput({ option }: { option: HurlOption }) {
-  const value = useStore((s) => s.prefs.options[option.long]);
+/**
+ * Checkbox of a flag of `hurl` in the preferences, by long name. Renders
+ * nothing if this version of Hurl has no such flag.
+ */
+export function OptionCheck({ long }: { long: string }) {
+  const option = useStore((s) => s.hurlOptions?.options.find((o) => o.long === long));
+  const value = useStore((s) => s.prefs.options[long]);
   const setOption = useStore((s) => s.setOption);
+  if (!option || option.kind !== 'flag' || !isSettable(option)) return null;
+  return <FlagCheck option={option} value={value} setOption={setOption} />;
+}
+
+/** Control of an option which takes a value. */
+function OptionInput({ option, value, setOption }: { option: HurlOption; value?: OptionValue; setOption: SetOption }) {
   const id = `hurl-option-${option.long}`;
   const label = (
     <label htmlFor={id} title={title(option)}>
@@ -116,10 +126,12 @@ function OptionInput({ option }: { option: HurlOption }) {
   );
 }
 
-/** All the options of `hurl` which can be set for every run, under the headings of `hurl --help`. */
-export function HurlOptionsForm() {
+/**
+ * All the options of `hurl` which can be set for a run, under the headings
+ * of `hurl --help`: the ones of the preferences, of a folder or of a file.
+ */
+export function HurlOptionsForm({ values, setOption }: { values: Record<string, OptionValue>; setOption: SetOption }) {
   const catalog = useStore((s) => s.hurlOptions);
-  const values = useStore((s) => s.prefs.options);
   const [filter, setFilter] = useState('');
   const [onlySet, setOnlySet] = useState(false);
   const settable = useMemo(() => catalog?.options.filter(isSettable) ?? [], [catalog]);
@@ -157,14 +169,14 @@ export function HurlOptionsForm() {
             {flags.length > 0 && (
               <div className="form-stack">
                 {flags.map((o) => (
-                  <OptionCheck key={o.long} long={o.long} />
+                  <FlagCheck key={o.long} option={o} value={values[o.long]} setOption={setOption} />
                 ))}
               </div>
             )}
             {inputs.length > 0 && (
               <div className="form-grid">
                 {inputs.map((o) => (
-                  <OptionInput key={o.long} option={o} />
+                  <OptionInput key={o.long} option={o} value={values[o.long]} setOption={setOption} />
                 ))}
               </div>
             )}
@@ -251,4 +263,13 @@ export function SectionValue(props: { name: string; value: string; onChange: (va
       }}
     />
   );
+}
+
+/** Options as they are written on a command line, for display. */
+export function commandLine(values: Record<string, OptionValue>): string {
+  return Object.entries(values)
+    .flatMap(([long, value]) =>
+      value === true ? [`--${long}`] : (Array.isArray(value) ? value : [String(value)]).map((v) => `--${long} ${v}`),
+    )
+    .join('  ');
 }

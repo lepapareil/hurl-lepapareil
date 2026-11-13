@@ -1,6 +1,7 @@
 // Window chrome: title bar, request tabs, environment selector, status bar, console.
 
 import {
+  IconAdjustmentsHorizontal,
   IconFolder,
   IconCheck,
   IconDatabase,
@@ -133,6 +134,13 @@ function TabLabel({ tab }: { tab: Tab }) {
           <span className="tab-name">Environments</span>
         </>
       );
+    case 'options':
+      return (
+        <>
+          <IconAdjustmentsHorizontal size={14} stroke={1.5} />
+          <span className="tab-name">Options · {baseName(tab.path)}</span>
+        </>
+      );
     default:
       return (
         <>
@@ -172,7 +180,13 @@ export function TabsBar() {
       <div className="collection-header">
         <div className="collection-title">
           <IconFolder size={16} stroke={1.5} />
-          <span>{collection?.name ?? 'Hurl UI'}</span>
+          {collection ? (
+            <span className="path-label" title={collection.path}>
+              <bdi>{collection.path}</bdi>
+            </span>
+          ) : (
+            <span>Hurl UI</span>
+          )}
         </div>
         {collection && (
           <div className="collection-actions">

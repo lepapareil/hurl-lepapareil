@@ -76,9 +76,12 @@ export interface EntrySummary {
   name: string;
 }
 
+/** Options of `hurl` of a folder or of a Hurl file, from its options file, by long name. */
+export type PathOptions = Record<string, boolean | string | string[]>;
+
 export type TreeNode =
-  | { type: 'folder'; name: string; path: string; children: TreeNode[] }
-  | { type: 'file'; name: string; path: string; stamp: string; entries: EntrySummary[] };
+  | { type: 'folder'; name: string; path: string; options: PathOptions; children: TreeNode[] }
+  | { type: 'file'; name: string; path: string; stamp: string; options: PathOptions; entries: EntrySummary[] };
 
 export interface Variable {
   name: string;
@@ -95,6 +98,8 @@ export interface Environment {
 export interface Collection {
   path: string;
   name: string;
+  /** Options of its options file. */
+  options: PathOptions;
   children: TreeNode[];
   environments: Environment[];
 }

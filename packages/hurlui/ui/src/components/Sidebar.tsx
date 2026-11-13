@@ -1,6 +1,7 @@
 // Left sidebar: the opened folders, their Hurl files and their requests.
 
 import {
+  IconAdjustmentsHorizontal,
   IconAlertTriangle,
   IconChevronRight,
   IconCopy,
@@ -83,6 +84,7 @@ function collectionMenu(c: Collection): MenuItem[] {
     { label: 'New Hurl File', icon: <IconPlus {...ICON} />, onClick: () => newFileInFolder(c.path, c.path) },
     { label: 'New Folder', icon: <IconFolderPlus {...ICON} />, onClick: () => newFolder(c.path, c.path) },
     { label: 'Run', icon: <IconPlayerPlay {...ICON} />, onClick: () => s.openRunner(c.path, c.path) },
+    { label: 'Options', icon: <IconAdjustmentsHorizontal {...ICON} />, onClick: () => s.openOptions(c.path, c.path) },
     { label: 'Environments', icon: <IconDatabase {...ICON} />, onClick: () => s.openEnvironments(c.path) },
     { label: 'Show in File Manager', icon: <IconFolderOpen {...ICON} />, onClick: () => s.reveal(c.path) },
     { label: 'Refresh', icon: <IconRefresh {...ICON} />, onClick: () => s.refreshCollection(c.path) },
@@ -97,6 +99,7 @@ function folderMenu(collection: string, path: string): MenuItem[] {
     { label: 'New Hurl File', icon: <IconPlus {...ICON} />, onClick: () => newFileInFolder(collection, path) },
     { label: 'New Folder', icon: <IconFolderPlus {...ICON} />, onClick: () => newFolder(collection, path) },
     { label: 'Run', icon: <IconPlayerPlay {...ICON} />, onClick: () => s.openRunner(collection, path) },
+    { label: 'Options', icon: <IconAdjustmentsHorizontal {...ICON} />, onClick: () => s.openOptions(collection, path) },
     { label: 'Rename', icon: <IconPencil {...ICON} />, onClick: () => rename(collection, path) },
     { label: 'Show in File Manager', icon: <IconFolderOpen {...ICON} />, onClick: () => s.reveal(path) },
     { separator: true },
@@ -109,6 +112,7 @@ function fileMenu(collection: string, path: string): MenuItem[] {
   return [
     { label: 'New Request', icon: <IconPlus {...ICON} />, onClick: () => newRequestInFile(collection, path) },
     { label: 'Run', icon: <IconPlayerPlay {...ICON} />, onClick: () => s.openRunner(collection, path) },
+    { label: 'Options', icon: <IconAdjustmentsHorizontal {...ICON} />, onClick: () => s.openOptions(collection, path) },
     { label: 'Edit as Text', icon: <IconFileText {...ICON} />, onClick: () => s.openFile(collection, path) },
     { label: 'Rename', icon: <IconPencil {...ICON} />, onClick: () => rename(collection, path) },
     { label: 'Clone', icon: <IconCopy {...ICON} />, onClick: () => cloneFile(collection, path) },
@@ -269,6 +273,27 @@ function Chevron({ open }: { open: boolean }) {
   return <IconChevronRight size={14} stroke={1.5} className={`chevron ${open ? 'open' : ''}`} />;
 }
 
+/** Mark of a folder or of a file which has options of its own: opens them. */
+function OptionsMark({ collection, path }: { collection: string; path: string }) {
+  const count = useStore((s) => Object.keys(s.pathOptions[path] ?? {}).length);
+  if (count === 0) return null;
+  const label = `${count} option${count === 1 ? '' : 's'} set here`;
+  return (
+    <button
+      type="button"
+      className="row-options"
+      title={label}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        useStore.getState().openOptions(collection, path);
+      }}
+    >
+      <IconAdjustmentsHorizontal size={13} stroke={1.5} />
+    </button>
+  );
+}
+
 /** Button in front of the name of a row: runs it, or stops its run. */
 function RunButton(props: { what: string; running: boolean; onRun: () => void; onStop: () => void }) {
   const label = props.running ? `Stop the run of ${props.what}` : `Run ${props.what}`;
@@ -385,7 +410,11 @@ const TreeRowView = memo(function TreeRowView({ row }: { row: TreeRow }) {
           <Chevron open={row.open} />
           <RunTargetButton collection={collection.path} path={collection.path} what="this folder" />
           <IconFolder size={15} stroke={1.5} className="tree-icon" />
-          <span className="tree-label collection-name">{collection.name}</span>
+          {/* The path of the opened folder, not only its name: cut at its start when it is too long. */}
+          <span className="tree-label collection-name path-label">
+            <bdi>{collection.path}</bdi>
+          </span>
+          <OptionsMark collection={collection.path} path={collection.path} />
         </Row>
       );
     }
@@ -397,6 +426,7 @@ const TreeRowView = memo(function TreeRowView({ row }: { row: TreeRow }) {
           <RunTargetButton collection={collection} path={node.path} what="this folder" />
           <IconFolder size={15} stroke={1.5} className="tree-icon" />
           <span className="tree-label">{node.name}</span>
+          <OptionsMark collection={collection} path={node.path} />
         </Row>
       );
     }
@@ -414,6 +444,7 @@ const TreeRowView = memo(function TreeRowView({ row }: { row: TreeRow }) {
           <RunTargetButton collection={collection} path={node.path} what="this file" />
           <IconFileText size={15} stroke={1.5} className="tree-icon" />
           <span className="tree-label">{node.name}</span>
+          <OptionsMark collection={collection} path={node.path} />
           <span className="tree-count">{node.entries.length}</span>
         </Row>
       );

@@ -1,7 +1,14 @@
 import { memo, useEffect } from 'react';
 import { Console, StatusBar, TabsBar, TitleBar } from './components/Chrome';
 import { EntryPanel } from './components/EntryPanel';
-import { EnvironmentsPanel, FilePanel, PreferencesPanel, RunnerPanel, Welcome } from './components/Panels';
+import {
+  EnvironmentsPanel,
+  FilePanel,
+  PathOptionsPanel,
+  PreferencesPanel,
+  RunnerPanel,
+  Welcome,
+} from './components/Panels';
 import { Sidebar } from './components/Sidebar';
 import { DialogHost, MenuHost, ToastHost } from './components/ui';
 import { useStore } from './store';
@@ -63,6 +70,8 @@ function TabPanel({ id }: { id: string }) {
       return <RunnerPanel tab={tab} />;
     case 'environments':
       return <EnvironmentsPanel tab={tab} />;
+    case 'options':
+      return <PathOptionsPanel tab={tab} />;
     default:
       return <PreferencesPanel />;
   }

@@ -72,7 +72,7 @@ function knownOptions(options: Record<string, OptionValue>, catalog: HurlOptions
   return Object.fromEntries(Object.entries(options).filter(([long, value]) => settable.has(long) && isSet(value)));
 }
 
-export type TabKind = 'entry' | 'file' | 'runner' | 'environments' | 'preferences';
+export type TabKind = 'entry' | 'file' | 'runner' | 'environments' | 'options' | 'preferences';
 
 export interface Tab {
   id: string;
@@ -162,6 +162,39 @@ export const ids = {
 
 export function isUnder(path: string, parent: string): boolean {
   return path === parent || path.startsWith(`${parent}/`) || path.startsWith(`${parent}\\`);
+}
+
+/** Options of `hurl`, by long name (see `Prefs.options`). */
+export type OptionValues = Record<string, OptionValue>;
+
+/**
+ * Folders from the opened folder `collection` down to `path`, then `path`
+ * itself: the levels at which options can be set for what is run there.
+ */
+export function levelsOf(collection: string, path: string): string[] {
+  const levels: string[] = [];
+  for (let p = path; isUnder(p, collection); p = p.replace(/[\\/][^\\/]+$/, '')) {
+    levels.unshift(p);
+    if (p === collection) break;
+  }
+  return levels;
+}
+
+/**
+ * Options of several levels, from the widest to the nearest: the nearest
+ * level wins, but for the options which can be given several times
+ * (headers, variables...), whose values add up.
+ */
+export function mergeOptions(catalog: HurlOptions | null, levels: (OptionValues | undefined)[]): OptionValues {
+  const merged: OptionValues = {};
+  for (const level of levels) {
+    for (const [long, value] of Object.entries(level ?? {})) {
+      const before = merged[long];
+      const multi = catalog?.options.find((o) => o.long === long)?.multi;
+      merged[long] = multi && Array.isArray(before) && Array.isArray(value) ? [...before, ...value] : value;
+    }
+  }
+  return merged;
 }
 
 export function baseName(path: string): string {
@@ -306,6 +339,14 @@ interface State {
   hurlOptions: HurlOptions | null;
   /** Predicates of an assert, from the core, which has them from Hurl. */
   hurlPredicates: string[];
+  /**
+   * Options of `hurl` set on a folder or on a file, by path: added to the
+   * command line of whatever is run under it, after the ones of the
+   * preferences (see `mergeOptions`). They are the content of the options
+   * files found by the scan of the opened folders (`<folder name>.options`
+   * in a folder, `<file name>.options` next to a Hurl file).
+   */
+  pathOptions: Record<string, OptionValues>;
   prefs: Prefs;
   collections: Collection[];
   /** Saved collections which could not be read at startup (unplugged drive...). */
@@ -330,6 +371,10 @@ interface State {
   setPrefs(patch: Partial<Prefs>): void;
   /** Sets an option of `hurl` in the preferences, or unsets it. */
   setOption(long: string, value: OptionValue | undefined): void;
+  /** Sets an option of `hurl` on a folder or a file, or unsets it. */
+  setPathOption(path: string, long: string, value: OptionValue | undefined): void;
+  /** Opens the options of a folder or of a file. */
+  openOptions(collection: string, path: string): void;
   setLayout(patch: Partial<Pick<State, 'sidebarWidth' | 'sidebarCollapsed' | 'consoleOpen'>>): void;
   toggle(path: string, open?: boolean): void;
 
@@ -410,12 +455,26 @@ function persistSoon() {
   }, 400);
 }
 
+/**
+ * Paths whose options are being written (timer of the write): until it is
+ * done, what the disk holds is older than what is shown.
+ */
+const pendingOptions = new Map<string, number>();
+
+/** Options file of a folder or of a Hurl file, as the core names it. */
+export function optionsFile(path: string, isFile: boolean): string {
+  const separator = path.includes('\\') && !path.includes('/') ? '\\' : '/';
+  return isFile ? `${path}.options` : `${path}${separator}${baseName(path)}.options`;
+}
+
 export const useStore = create<State>((set, get) => {
-  const runArgs = () => {
-    const p = get().prefs;
+  /** Arguments of a run of `file`: the options of the preferences, of its folders and of the file. */
+  const runArgs = (collection: string, file: string) => {
+    const { prefs: p, pathOptions, hurlOptions } = get();
+    const levels = levelsOf(collection, file).map((path) => pathOptions[path]);
     return {
       hurlPath: p.hurlPath,
-      options: p.options,
+      options: mergeOptions(hurlOptions, [p.options, ...levels]),
       verbosity: p.verbosity,
       extraArgs: p.extraArgs,
     };
@@ -672,6 +731,7 @@ export const useStore = create<State>((set, get) => {
     appInfo: null,
     hurlOptions: null,
     hurlPredicates: [],
+    pathOptions: {},
     prefs: DEFAULT_PREFS,
     collections: [],
     unavailable: [],
@@ -758,6 +818,29 @@ export const useStore = create<State>((set, get) => {
     setOption(long, value) {
       const { [long]: _, ...options } = get().prefs.options;
       get().setPrefs({ options: value !== undefined && isSet(value) ? { ...options, [long]: value } : options });
+    },
+
+    setPathOption(path, long, value) {
+      set((s) => {
+        const { [long]: _, ...rest } = s.pathOptions[path] ?? {};
+        const options = value !== undefined && isSet(value) ? { ...rest, [long]: value } : rest;
+        const { [path]: __, ...others } = s.pathOptions;
+        return { pathOptions: Object.keys(options).length > 0 ? { ...others, [path]: options } : others };
+      });
+      // Written in the options file of the path, once the typing pauses.
+      window.clearTimeout(pendingOptions.get(path));
+      const timer = window.setTimeout(() => {
+        call('save_options', { path, options: get().pathOptions[path] ?? {} })
+          .catch(toastError)
+          .finally(() => {
+            if (pendingOptions.get(path) === timer) pendingOptions.delete(path);
+          });
+      }, 400);
+      pendingOptions.set(path, timer);
+    },
+
+    openOptions(collection, path) {
+      addTab({ id: `options:${path}`, kind: 'options', collection, path, index: 0, pane: '', responsePane: '' });
     },
 
     setLayout(patch) {
@@ -1293,7 +1376,7 @@ export const useStore = create<State>((set, get) => {
           environment: activeEnv[tab.collection] ?? null,
           fromEntry: prefs.chainEntries ? null : tab.index,
           toEntry: tab.index,
-          ...runArgs(),
+          ...runArgs(tab.collection, tab.path),
         });
         recordRun(result);
         if (!result.entries.some((e) => e.index === tab.index)) {
@@ -1322,7 +1405,7 @@ export const useStore = create<State>((set, get) => {
           file: path,
           collection,
           environment: get().activeEnv[collection] ?? null,
-          ...runArgs(),
+          ...runArgs(collection, path),
         });
         recordRun(result);
         setRun({ running: false, result: slimResult(result) });
@@ -1357,7 +1440,7 @@ export const useStore = create<State>((set, get) => {
             file: file.path,
             collection: tab.collection,
             environment: get().activeEnv[tab.collection] ?? null,
-            ...runArgs(),
+            ...runArgs(tab.collection, file.path),
           });
           recordRun(result);
         } catch (e) {
@@ -1400,3 +1483,29 @@ export const useStore = create<State>((set, get) => {
 export function entryOfTab(state: Pick<State, 'files'>, tab: Tab): Entry | undefined {
   return tab.draft ?? state.files[tab.path]?.entries[tab.index - 1];
 }
+
+// The options of the folders and of the files are the ones of their options
+// files, read by the scan: they follow the opened folders.
+useStore.subscribe((s, previous) => {
+  if (s.collections === previous.collections) return;
+  const pathOptions: Record<string, OptionValues> = {};
+  const add = (path: string, options: OptionValues) => {
+    if (Object.keys(options).length > 0) pathOptions[path] = options;
+  };
+  const walk = (nodes: TreeNode[]) => {
+    for (const node of nodes) {
+      add(node.path, node.options);
+      if (node.type === 'folder') walk(node.children);
+    }
+  };
+  for (const collection of s.collections) {
+    add(collection.path, collection.options);
+    walk(collection.children);
+  }
+  // An edit which is not written yet wins over what was read.
+  for (const path of pendingOptions.keys()) {
+    if (s.pathOptions[path]) pathOptions[path] = s.pathOptions[path];
+    else delete pathOptions[path];
+  }
+  useStore.setState({ pathOptions });
+});

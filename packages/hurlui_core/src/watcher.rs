@@ -23,7 +23,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::{RecvTimeoutError, channel};
 use std::time::Duration;
 
-use crate::collection::{LEGACY_ENVIRONMENTS_DIR, is_ignored_name};
+use crate::collection::{LEGACY_ENVIRONMENTS_DIR, OPTIONS_EXTENSION, is_ignored_name};
 
 const DEBOUNCE: Duration = Duration::from_millis(250);
 
@@ -60,7 +60,10 @@ fn relevant(root: &Path, path: &Path, kind: &EventKind) -> bool {
     // the ones former versions kept in their own directory).
     let environment = has_extension(rel, "env")
         && (rel.components().count() == 1 || rel.starts_with(LEGACY_ENVIRONMENTS_DIR));
-    has_extension(rel, "hurl") || environment || path.is_dir()
+    has_extension(rel, "hurl")
+        || has_extension(rel, OPTIONS_EXTENSION)
+        || environment
+        || path.is_dir()
 }
 
 /// Watches `path` recursively and calls `on_change` once per burst of events.
@@ -127,6 +130,8 @@ mod tests {
         assert!(relevant(root, &at("users/list.hurl"), &write));
         assert!(relevant(root, &at("new.HURL"), &create));
         assert!(relevant(root, &at("local.env"), &write));
+        assert!(relevant(root, &at("users/users.options"), &write));
+        assert!(relevant(root, &at("users/list.hurl.options"), &create));
         assert!(relevant(root, &at("environments/local.env"), &write));
         assert!(relevant(root, &at("users"), &remove));
         assert!(relevant(root, &at("old-name"), &rename));

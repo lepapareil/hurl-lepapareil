@@ -262,6 +262,116 @@ pub fn arguments(values: &Map<String, Value>) -> Result<Vec<String>, String> {
     Ok(args)
 }
 
+impl OptionSpec {
+    /// Whether the option can be set by the user for a run: in the
+    /// preferences, or in the options file of a folder or of a Hurl file.
+    pub fn settable(&self) -> bool {
+        self.cli && !self.managed && !self.deprecated && !self.experimental
+    }
+}
+
+// --- Options files ----------------------------------------------------------
+//
+// Options of a folder or of a Hurl file are kept next to it, in a file
+// written as the configuration file of Hurl (`~/.config/hurl/config`): one
+// option per line, `--name` for a flag and `--name value` otherwise, with `#`
+// comments.
+
+/// Options of an options file, by long name (as taken by [`arguments`]),
+/// and the lines which are not such an option (comments, options this
+/// version of Hurl does not have): they are kept when the file is written.
+pub fn parse_file(text: &str) -> (Map<String, Value>, Vec<String>) {
+    let mut values = Map::new();
+    let mut others = vec![];
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match parse_line(trimmed) {
+            Some((option, None)) => {
+                values.insert(option.long.clone(), Value::Bool(true));
+            }
+            Some((option, Some(value))) if option.multi => {
+                let list = values
+                    .entry(option.long.clone())
+                    .or_insert_with(|| Value::Array(vec![]));
+                if let Value::Array(items) = list {
+                    items.push(Value::String(value));
+                }
+            }
+            Some((option, Some(value))) => {
+                values.insert(option.long.clone(), Value::String(value));
+            }
+            None => others.push(line.to_string()),
+        }
+    }
+    (values, others)
+}
+
+/// An option line: the option, and its value if it takes one.
+fn parse_line(line: &str) -> Option<(&'static OptionSpec, Option<String>)> {
+    let rest = line.strip_prefix("--")?;
+    let end = rest
+        .find(|c: char| !(c.is_alphanumeric() || "-_.".contains(c)))
+        .unwrap_or(rest.len());
+    let (name, rest) = rest.split_at(end);
+    let option = find(name).filter(|option| option.settable())?;
+    if option.kind == Kind::Flag {
+        let rest = rest.trim();
+        return (rest.is_empty() || rest.starts_with('#')).then_some((option, None));
+    }
+    // The value follows a space or `=`.
+    let value = rest.strip_prefix('=').or_else(|| {
+        rest.starts_with([' ', '\t'])
+            .then(|| rest.trim_start_matches([' ', '\t']))
+    })?;
+    let value = match value.strip_prefix('"') {
+        // Quoted: up to the closing quote, a comment may follow.
+        Some(quoted) => {
+            let (value, after) = quoted.split_once('"')?;
+            let after = after.trim();
+            if !(after.is_empty() || after.starts_with('#')) {
+                return None;
+            }
+            value.trim()
+        }
+        None => value.trim(),
+    };
+    (!value.is_empty()).then(|| (option, Some(value.to_string())))
+}
+
+/// Text of an options file: the lines kept from the file it replaces, then
+/// the options, in the order of the catalog. Empty when there is nothing to
+/// write.
+pub fn format_file(values: &Map<String, Value>, others: &[String]) -> Result<String, String> {
+    // Same checks as for a command line.
+    let args = arguments(values)?;
+    let mut text = String::new();
+    for line in others {
+        text.push_str(line);
+        text.push('\n');
+    }
+    let mut args = args.into_iter().peekable();
+    while let Some(flag) = args.next() {
+        let name = flag.trim_start_matches("--");
+        let valued = find(name).is_some_and(|option| option.kind != Kind::Flag);
+        text.push_str(&flag);
+        if valued {
+            let value = args.next().unwrap_or_default();
+            // One option per line, and a value which starts with a quote
+            // would be read as a quoted one.
+            if value.contains('\n') || value.starts_with('"') {
+                return Err(format!("{flag}: this value cannot be written: {value}"));
+            }
+            text.push(' ');
+            text.push_str(&value);
+        }
+        text.push('\n');
+    }
+    Ok(text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -356,6 +466,66 @@ mod tests {
             ]
         );
         assert_eq!(arguments(&Map::new()).unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn options_files_are_read_and_written() {
+        let text = "# Options of the API\n\
+                    --insecure\n\
+                    --location   # follow redirects\n\
+                    --header X-A: 1\n\
+                    --header=\"X-B: 2\"  # quoted\n\
+                    \n\
+                    --max-time=30s\n\
+                    --retry 3\n\
+                    --retry 5\n\
+                    --unknown-option 1\n\
+                    --report-json /tmp\n\
+                    --insecure yes\n\
+                    --proxy\n\
+                    not an option\n";
+        let (parsed, others) = parse_file(text);
+        assert_eq!(
+            Value::Object(parsed.clone()),
+            json!({
+                "insecure": true,
+                "location": true,
+                "header": ["X-A: 1", "X-B: 2"],
+                "max-time": "30s",
+                "retry": "5",
+            })
+        );
+        // What is not an option which can be set is kept as it is.
+        assert_eq!(
+            others,
+            [
+                "# Options of the API",
+                "--unknown-option 1",
+                "--report-json /tmp",
+                "--insecure yes",
+                "--proxy",
+                "not an option"
+            ]
+        );
+        let written = format_file(&parsed, &others[..1]).unwrap();
+        assert_eq!(
+            written,
+            "# Options of the API\n\
+             --header X-A: 1\n\
+             --header X-B: 2\n\
+             --insecure\n\
+             --location\n\
+             --max-time 30s\n\
+             --retry 5\n"
+        );
+        // Reading what was written gives the same options.
+        assert_eq!(parse_file(&written).0, parsed);
+        assert_eq!(format_file(&Map::new(), &[]).unwrap(), "");
+
+        let invalid = |value: Value| format_file(&values(value), &[]).unwrap_err();
+        assert!(invalid(json!({ "proxy": "\"quoted" })).contains("cannot be written"));
+        assert!(invalid(json!({ "header": ["a\nb"] })).contains("cannot be written"));
+        assert!(invalid(json!({ "report-json": "/tmp" })).contains("set by Hurl UI"));
     }
 
     #[test]

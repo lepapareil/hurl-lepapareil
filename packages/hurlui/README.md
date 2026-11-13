@@ -30,6 +30,7 @@ exécuté).
 | Script / Settings | `[Options]` de la requête (pas de script dans Hurl) |
 | Docs | Commentaires au-dessus de la requête |
 | Environnements | `<nom>.env` à la racine du répertoire ouvert, fichier de variables Hurl (`--variables-file`) |
+| Options d'un répertoire, d'un fichier | `<nom du répertoire>.options` dans le répertoire, `<nom du fichier>.options` à côté du fichier, au format du fichier de configuration de Hurl |
 | Secrets | Hors du répertoire, dans les données de l'application, transmis en secrets Hurl |
 | Runner | Exécution de `hurl` fichier par fichier ; le résultat d'un fichier ou d'un répertoire a les mêmes volets que celui d'une requête (Response, Headers, Timeline, Tests), sur toutes les requêtes exécutées |
 | Mode « File » | « Edit as Text » : édition du fichier `.hurl` avec coloration syntaxique |
@@ -161,6 +162,18 @@ shells. Le même script produit le catalogue de Hurl UI, `packages/hurlui_core/s
   liste des valeurs admises pour un choix, chiffres pour un entier, entier et unité pour une durée,
   texte libre sinon. Une valeur qui ne convient pas est signalée ; un `{{variable}}`, que Hurl
   admet pour toute option, reste toujours possible ;
+- les **options d'un répertoire ou d'un fichier** (clic droit, « Options ») : le même formulaire
+  que les préférences, pour ce qui est exécuté sous ce répertoire ou dans ce fichier. Les niveaux
+  s'ajoutent sur la ligne de commande, du plus large au plus proche (préférences, répertoires,
+  fichier) : le plus proche l'emporte, et les options répétables (en-têtes, variables…) se
+  cumulent. Une section `[Options]` d'une requête l'emporte sur tout. Ces options sont écrites dans
+  un fichier d'options à côté de ce qu'elles concernent : `<répertoire>/<nom du répertoire>.options`
+  pour un répertoire, `<nom du fichier>.options` à côté d'un fichier Hurl (`users.hurl.options` ;
+  l'extension `.hurl` est gardée, pour qu'un fichier `api.hurl` du répertoire `api` n'ait pas le
+  même fichier d'options que lui). Leur format est celui du fichier de configuration de Hurl
+  (`~/.config/hurl/config`) : une option par ligne, `--insecure`, `--max-time 30s`, commentaires
+  `#`. Ils suivent le renommage, le clonage et la suppression faits dans Hurl UI, et se versionnent
+  avec les fichiers Hurl ;
 - la **ligne de commande** de `hurl` : le cœur la construit à partir du catalogue et refuse une
   option qu'il ne connaît pas.
 

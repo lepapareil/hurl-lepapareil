@@ -22,7 +22,7 @@
 
 use notify::RecommendedWatcher;
 use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry as MapEntry;
 use std::path::{Path, PathBuf};
@@ -192,6 +192,11 @@ pub fn dispatch(ctx: &Arc<Ctx>, cmd: &str, args: Value) -> Result<Value, String>
             &arg::<String>(&args, "path")?,
             &arg::<String>(&args, "name")?,
         )?),
+        "save_options" => {
+            let values = arg::<Map<String, Value>>(&args, "options")?;
+            collection::save_options(&arg::<String>(&args, "path")?, &values)?;
+            Ok(Value::Null)
+        }
         "delete_path" => {
             collection::delete_path(&arg::<String>(&args, "path")?)?;
             Ok(Value::Null)
