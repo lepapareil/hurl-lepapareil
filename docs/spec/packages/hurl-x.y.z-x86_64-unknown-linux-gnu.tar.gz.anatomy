@@ -1,5 +1,5 @@
 [semver pattern: hurl-x.y.z-x86_64-unknown-linux-gnu.tar.gz]
-[elements: total 17, dirs 5, files 10, empty-files 0]
+[elements: total 18, dirs 5, files 11, empty-files 0]
 
 attr        user_group     type  file
 -------     ----------     ----  ----
@@ -7,6 +7,7 @@ drwxr-xr-x  runner/runner  dir   hurl-x.y.z-x86_64-unknown-linux-gnu/
 drwxr-xr-x  runner/runner  dir   hurl-x.y.z-x86_64-unknown-linux-gnu/bin/
 -rwxr-xr-x  runner/runner  file  hurl-x.y.z-x86_64-unknown-linux-gnu/bin/hurl
 -rwxr-xr-x  runner/runner  file  hurl-x.y.z-x86_64-unknown-linux-gnu/bin/hurlfmt
+-rwxr-xr-x  runner/runner  file  hurl-x.y.z-x86_64-unknown-linux-gnu/bin/hurlui
 drwxr-xr-x  runner/runner  dir   hurl-x.y.z-x86_64-unknown-linux-gnu/completions/
 -rw-r--r--  runner/runner  file  hurl-x.y.z-x86_64-unknown-linux-gnu/completions/_hurl
 -rw-r--r--  runner/runner  file  hurl-x.y.z-x86_64-unknown-linux-gnu/completions/_hurlfmt

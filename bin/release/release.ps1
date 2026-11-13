@@ -14,8 +14,9 @@ $env:VCPKGRS_DYNAMIC=1
 $env:BINDGEN_EXTRA_CLANG_ARGS="-I$vcpkg_dir/installed/x64-windows/include/libxml2 -v"
 $env:Path="$lib_dir" + ";" + "$actual_path"
 
-# build
-cargo build --release --verbose --locked
+# build hurl and hurlfmt. With `--workspace`, Hurl UI (hurlui) is built too: this is how packages are built
+# (Node.js is needed).
+cargo build --release --verbose --locked @args
 if ($LASTEXITCODE) { Throw }
 
 # create final package
@@ -29,6 +30,9 @@ Copy-Item -Path $lib_dir\libxml2.dll -Destination $package_dir
 Copy-Item -Path $lib_dir\iconv-2.dll -Destination $package_dir
 Copy-Item -Path $release_dir\hurl.exe -Destination $package_dir
 Copy-Item -Path $release_dir\hurlfmt.exe -Destination $package_dir
+if (Test-Path $release_dir\hurlui.exe) {
+    Copy-Item -Path $release_dir\hurlui.exe -Destination $package_dir
+}
 ((& $package_dir\hurl --version) -Split " ")[1] > $package_dir\version.txt
 Get-Content $package_dir\version.txt
 

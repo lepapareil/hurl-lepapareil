@@ -6,6 +6,7 @@ import sys
 import generate_completion
 import generate_man
 import generate_source
+import generate_ui
 from option import Option
 
 
@@ -80,6 +81,18 @@ def generate_completion_files(name: str, option_files: list[str]):
         output.write(src + "\n")
 
 
+def generate_ui_file(option_files: list[str], output_file: str):
+    options = [Option.parse_file(option_file) for option_file in option_files]
+    with open(generate_ui.SECTION_OPTIONS_FILE) as source:
+        section_options = generate_ui.parse_section_options(source.read())
+    with open(generate_ui.DURATION_UNITS_FILE) as source:
+        duration_units = generate_ui.parse_duration_units(source.read())
+    src = generate_ui.generate_ui(options, section_options, duration_units)
+    sys.stderr.write("Generate " + output_file + "\n")
+    with open(output_file, "w") as output:
+        output.write(src + "\n")
+
+
 def main():
     option_files_hurl = get_option_files("docs/spec/options/hurl")
     option_files_hurlfmt = get_option_files("docs/spec/options/hurlfmt")
@@ -101,6 +114,9 @@ def main():
     # Generate completion files
     generate_completion_files("hurl", option_files_hurl)
     generate_completion_files("hurlfmt", option_files_hurlfmt)
+
+    # Generate Hurl UI options catalog
+    generate_ui_file(option_files_hurl, "packages/hurlui_core/src/options/hurl.json")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 [semver pattern: hurl-x.y.z-x86_64-pc-windows-msvc.zip]
-[elements: total 16, dirs 0, files 14, empty-files 0]
+[elements: total 17, dirs 0, files 15, empty-files 0]
 
 attr     user_group  type  file
 -------  ----------  ----  ----
@@ -11,6 +11,7 @@ attr     user_group  type  file
 -rw----  defN        file  completions/_hurlfmt.ps1
 -rwx---  defN        file  hurl.exe
 -rwx---  defN        file  hurlfmt.exe
+-rwx---  defN        file  hurlui.exe
 -rw----  defN        file  iconv-2.dll
 -rw----  defN        file  libcurl.dll
 -rw----  defN        file  libxml2.dll

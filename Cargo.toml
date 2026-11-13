@@ -3,6 +3,16 @@ members = [
     "packages/hurl",
     "packages/hurlfmt",
     "packages/hurl_core",
+    "packages/hurlui",
+    "packages/hurlui_core",
+]
+# `cargo build` builds `hurl` and `hurlfmt`. Hurl UI (`hurlui`, Tauri desktop application) is built along with them by
+# `cargo build --workspace`: it needs Node.js to build its frontend, and the web view libraries of the system.
+default-members = [
+    "packages/hurl",
+    "packages/hurlfmt",
+    "packages/hurl_core",
+    "packages/hurlui_core",
 ]
 resolver = "2"
 

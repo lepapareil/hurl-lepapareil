@@ -60,6 +60,10 @@ bin/install_rust.sh
 bin/release/release.sh
 ```
 
+This builds `hurl` and `hurlfmt`. The tarball below also needs Hurl UI (`hurlui`), built by
+`bin/release/release.sh --workspace`: cross compiling it needs Node.js and the arm64 libraries of
+`bin/install_prerequisites_hurlui_ubuntu.sh`, and has not been tried.
+
 ## Create generic arm64 linux tarball
 
 ```

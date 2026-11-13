@@ -15,7 +15,7 @@ $temp_path = "$PSScriptRoot\..\..\target\tmp"
 New-Item -ItemType Directory -Path $temp_path | Out-Null
 
 cd $PSScriptRoot\..\..\target\win-package
-Get-ChildItem -Path *.dll, *hurl.exe, *hurlfmt.exe, *.txt, ..\..\*.md | Copy-Item -Destination $temp_path
+Get-ChildItem -Path *.dll, *hurl.exe, *hurlfmt.exe, *hurlui.exe, *.txt, ..\..\*.md | Copy-Item -Destination $temp_path
 New-Item -ItemType Directory -Path $temp_path\completions | Out-Null
 Copy-Item -Path ..\..\completions\*.ps1 -Recurse -Destination $temp_path\completions
 Get-ChildItem -Path $temp_path

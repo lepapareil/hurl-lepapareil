@@ -1,0 +1,45 @@
+[package]
+name = "hurlui"
+version = "9.0.0"
+authors = ["Fabrice Reix <fabrice.reix@orange.com>", "Jean-Christophe Amiel <jeanchristophe.amiel@orange.com>", "Filipe Pinto <filipe.pinto@orange.com>"]
+edition = "2024"
+license = "Apache-2.0"
+description = "Hurl UI, desktop client for Hurl"
+documentation = "https://hurl.dev"
+homepage = "https://hurl.dev"
+repository = "https://github.com/Orange-OpenSource/hurl"
+publish = false
+
+[lib]
+name = "hurlui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+hurlui_core = { version = "9.0.0", path = "../hurlui_core" }
+serde_json = "1.0.154"
+tauri = { version = "2.12.5", features = [] }
+tauri-plugin-dialog = "2.8.4"
+
+# Desktop only: the plugin does not exist on mobile, where the system already
+# keeps a single instance of an application.
+[target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
+tauri-plugin-single-instance = "2.5.5"
+
+# Buttons of the title bar, which is drawn by GTK (see `decoration` in
+# src/lib.rs).
+[target."cfg(target_os = \"linux\")".dependencies]
+gtk = "0.18.2"
+
+[features]
+# The frontend is embedded in the application: it is built by the build script
+# (see build.rs), which needs Node.js. Without this feature, the application
+# loads the frontend from the Vite development server: this is what
+# `tauri dev` does.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[lints]
+workspace = true

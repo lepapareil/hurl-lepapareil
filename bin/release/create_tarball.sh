@@ -15,7 +15,7 @@ mkdir -p "${package_dir}/bin"
 mkdir -p "${package_dir}/completions"
 mkdir -p "${package_dir}/man/man1"
 
-cp target/release/{hurl,hurlfmt} "${package_dir}/bin"
+cp target/release/{hurl,hurlfmt,hurlui} "${package_dir}/bin"
 cp completions/{_hurl,_hurlfmt,hurl.bash,hurlfmt.bash,hurl.fish,hurlfmt.fish} "${package_dir}/completions"
 cp target/man/* "${package_dir}/man/man1"
 

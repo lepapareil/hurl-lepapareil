@@ -1,0 +1,9 @@
+# Files which do not require the application to be rebuilt by `tauri dev`:
+# the frontend is served by Vite.
+/ui/
+/dist/
+/README.md
+/package.json
+/package-lock.json
+/tsconfig.json
+/vite.config.ts

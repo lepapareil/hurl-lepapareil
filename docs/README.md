@@ -15,7 +15,7 @@ is generated from it. If you want to modify <https://hurl.dev>, you can make a P
 Some files are dependent and needs to be generated appropriated.
 - `docs/spec/options/**/*.option`: define the command line option of `hurl` and `hurlfmt`. These are text declarative
 files that will update project files (Rust files to produce the output of `--help`, Rust file options etc..., shell completion
-script etc...). These files are also used to generate part of man files `docs/manual/hurl.md`, `docs/manual/hurlfmt.md`
+script, options catalog of Hurl UI etc...). These files are also used to generate part of man files `docs/manual/hurl.md`, `docs/manual/hurlfmt.md`
 - `docs/manual/hurl.md`/`docs/manual/hurlfmt.md`: Markdown source files of man pages `hurl.1``hurlfmt.1`
 - `README.md` / `packages/hurl/README.md`, / `packages/hurlfmt/README.md`: GitHub and <https://crates.io> READMEs. These
 files are entirely generated from previous files (`.options` files, `.md` manual) 

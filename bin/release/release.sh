@@ -3,7 +3,9 @@ set -Eeuo pipefail
 
 PATH="$HOME"/.cargo/bin:$PATH
 export PATH
-cargo build --release --verbose --locked
+# Builds hurl and hurlfmt. With `--workspace`, Hurl UI (hurlui) is built too: this is how packages are built
+# (Node.js and the libraries of bin/install_prerequisites_hurlui_ubuntu.sh are needed).
+cargo build --release --verbose --locked "$@"
 
 # Return PATH var to parent shell
 package_dir="$(cd target/release ; pwd)"

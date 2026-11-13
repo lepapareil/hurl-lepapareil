@@ -217,7 +217,7 @@ jobs:
 
       - name: Update version
         run: |
-          hurl_packages="hurl_core hurl hurlfmt"
+          hurl_packages="hurl_core hurl hurlfmt hurlui_core hurlui"
           for package in ${hurl_packages} ; do
             cargo_toml="packages/${package}/Cargo.toml"
             sed -i "s/^version.*/version = \"${RELEASE_VERSION}\"/" "${cargo_toml}"
@@ -236,7 +236,7 @@ jobs:
       # TODO: pourquoi on fait un update crate ici ? Quand on décide de faire une release, on devrait figer les crates
       - name: Cargo update
         run: |
-          python3 bin/update_crates.py packages/hurl packages/hurlfmt packages/hurl_core
+          python3 bin/update_crates.py packages/hurl packages/hurlfmt packages/hurl_core packages/hurlui_core packages/hurlui
 
       - name: Update installation doc
         run: |

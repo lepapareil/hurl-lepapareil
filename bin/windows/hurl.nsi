@@ -86,6 +86,15 @@ SectionGroup "executables"
     SetOutPath $INSTDIR
     File "hurlfmt.exe"
   SectionEnd
+  Section "hurlui.exe"
+    SectionIn RO
+    SetOutPath $INSTDIR
+    File "hurlui.exe"
+    ; Hurl UI is a desktop application: add it to the start menu of all users
+    SetShellVarContext all
+    CreateShortcut "$SMPROGRAMS\Hurl UI.lnk" "$INSTDIR\hurlui.exe"
+    SetShellVarContext current
+  SectionEnd
 SectionGroupEnd
 
 SectionGroup "dlls"
@@ -154,6 +163,10 @@ Section "Uninstall"
   ; Remove installed files
   Delete $INSTDIR\*
   RMDir "$INSTDIR"
+  ; Remove Hurl UI from the start menu
+  SetShellVarContext all
+  Delete "$SMPROGRAMS\Hurl UI.lnk"
+  SetShellVarContext current
   ; Remove entry from windows uninstaller panel
   DeleteRegKey HKLM "${UNINSTALLPANELKEY}"
   ; Remove install dir from user Path variable

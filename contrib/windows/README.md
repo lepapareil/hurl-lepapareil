@@ -66,8 +66,11 @@ git.exe clone https://github.com/Orange-OpenSource/hurl.git
 ```pwsh
 cd c:\hurl
 .\bin\install_prerequisites_windows.ps1
-.\bin\release\release.ps1
+.\bin\release\release.ps1 --workspace
 ```
+
+`--workspace` builds Hurl UI (`hurlui.exe`) along with `hurl.exe` and `hurlfmt.exe`: [Node.js](https://nodejs.org) is
+needed to build its frontend. The packages below need the three binaries.
 
 # Create a simple zip package
 
